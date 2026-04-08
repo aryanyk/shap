@@ -5,7 +5,6 @@ import pytest
 
 from shap.utils import image as image_utils
 
-
 # Public functions in shap/utils/image.py:
 # - is_empty(path): returns True when path does not exist or directory is empty; otherwise False.
 # - make_dir(path): creates a directory if missing; empties files in an existing directory.
@@ -87,7 +86,12 @@ def test_add_sample_images_saves_expected_imagenet_indices(monkeypatch, tmp_path
 
     image_utils.add_sample_images(str(tmp_path))
 
-    assert [os.path.basename(path) for _, path in calls] == ["1.jpg", "2.jpg", "3.jpg", "4.jpg"]
+    assert [os.path.basename(path) for _, path in calls] == [
+        "1.jpg",
+        "2.jpg",
+        "3.jpg",
+        "4.jpg",
+    ]
     expected_idxs = [25, 26, 30, 44]
     for (arr, _), idx in zip(calls, expected_idxs):
         np.testing.assert_array_equal(arr, images[idx])
@@ -98,7 +102,11 @@ def test_load_image_converts_bgr_to_rgb_and_returns_float(monkeypatch):
     rgb = np.array([[[3, 2, 1]]], dtype=np.uint8)
 
     monkeypatch.setattr(image_utils.cv2, "imread", lambda _: bgr)
-    monkeypatch.setattr(image_utils.cv2, "cvtColor", lambda img, _: rgb if np.array_equal(img, bgr) else img)
+    monkeypatch.setattr(
+        image_utils.cv2,
+        "cvtColor",
+        lambda img, _: rgb if np.array_equal(img, bgr) else img,
+    )
 
     out = image_utils.load_image("dummy.jpg")
 
@@ -189,7 +197,7 @@ def test_resize_image_rectangular_over_limit_resizes_with_aspect_ratio(monkeypat
 
 
 def test_resize_image_within_limit_returns_original_and_none_path(monkeypatch, tmp_path):
-    original = np.ones((500, 499, 3), dtype=np.uint8)
+    original: np.ndarray = np.ones((500, 499, 3), dtype=np.uint8)
     monkeypatch.setattr(image_utils, "load_image", lambda _: original)
 
     def fail_resize(*_args, **_kwargs):
@@ -201,8 +209,6 @@ def test_resize_image_within_limit_returns_original_and_none_path(monkeypatch, t
 
     assert out_path is None
     assert out_image is original
-
-
 
 
 def test_load_image_propagates_error_for_missing_image(monkeypatch):
@@ -234,8 +240,10 @@ def test_resize_image_invalid_loaded_data_raises(monkeypatch, tmp_path):
         image_utils.resize_image("/img/bad.jpg", str(tmp_path))
 
 
-def test_display_grid_plot_creates_new_figure_when_columns_exceeded_and_sets_titles(monkeypatch):
-    images = {
+def test_display_grid_plot_creates_new_figure_when_columns_exceeded_and_sets_titles(
+    monkeypatch,
+):
+    images: dict[str, np.ndarray] = {
         "a": np.ones((1, 1, 3), dtype=np.uint8),
         "b": np.ones((1, 1, 3), dtype=np.uint8) * 2,
         "c": np.ones((1, 1, 3), dtype=np.uint8) * 3,

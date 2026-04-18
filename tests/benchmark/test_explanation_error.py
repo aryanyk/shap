@@ -43,6 +43,5 @@ def test_aggregates_all_rows_not_just_last():
     result_last = benchmark_last(attributions[-1:], "test", silent=True)
 
     assert result.value > result_last.value + 1e-8, (
-        "ExplanationError should aggregate across all rows, "
-        "not just use the last row"
+        "ExplanationError should aggregate across all rows, not just use the last row"
     )

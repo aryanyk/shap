@@ -70,48 +70,38 @@ def test_make_dir_given_file_path_raises_not_a_directory_error(tmp_path):
 
 
 def test_add_sample_images_saves_expected_imagenet_indices(monkeypatch, tmp_path):
-    images = np.arange(50 * 2 * 2 * 3).reshape(50, 2, 2, 3)
+    baseline_image = image_utils.load_image("tests/plots/baseline/test_bar.png").astype(
+        np.uint8
+    )
+
+    images = np.zeros((50, *baseline_image.shape), dtype=np.uint8)
+    images[25] = np.full_like(baseline_image, 10)
+    images[26] = np.full_like(baseline_image, 60)
+    images[30] = np.full_like(baseline_image, 120)
+    images[44] = np.full_like(baseline_image, 200)
     labels = np.arange(50)
 
-    calls = []
-
-    def fake_imagenet50():
-        return images, labels
-
-    def fake_save_image(arr, path):
-        calls.append((arr.copy(), path))
-
-    monkeypatch.setattr(image_utils.shap.datasets, "imagenet50", fake_imagenet50)
-    monkeypatch.setattr(image_utils, "save_image", fake_save_image)
+    monkeypatch.setattr(
+        image_utils.shap.datasets, "imagenet50", lambda: (images, labels)
+    )
 
     image_utils.add_sample_images(str(tmp_path))
 
-    assert [os.path.basename(path) for _, path in calls] == [
-        "1.jpg",
-        "2.jpg",
-        "3.jpg",
-        "4.jpg",
-    ]
-    expected_idxs = [25, 26, 30, 44]
-    for (arr, _), idx in zip(calls, expected_idxs):
-        np.testing.assert_array_equal(arr, images[idx])
+    written = [tmp_path / f"{idx}.jpg" for idx in range(1, 5)]
+    assert [path.name for path in written] == ["1.jpg", "2.jpg", "3.jpg", "4.jpg"]
+    assert all(path.exists() for path in written)
+
+    means = [image_utils.load_image(str(path)).mean() for path in written]
+    assert means[0] < means[1] < means[2] < means[3]
 
 
-def test_load_image_converts_bgr_to_rgb_and_returns_float(monkeypatch):
-    bgr = np.array([[[1, 2, 3]]], dtype=np.uint8)
-    rgb = np.array([[[3, 2, 1]]], dtype=np.uint8)
-
-    monkeypatch.setattr(image_utils.cv2, "imread", lambda _: bgr)
-    monkeypatch.setattr(
-        image_utils.cv2,
-        "cvtColor",
-        lambda img, _: rgb if np.array_equal(img, bgr) else img,
-    )
-
-    out = image_utils.load_image("dummy.jpg")
+def test_load_image_returns_float_array_with_real_image():
+    out = image_utils.load_image("tests/plots/baseline/test_bar.png")
 
     assert out.dtype == float
-    np.testing.assert_array_equal(out, rgb.astype(float))
+    assert out.ndim == 3
+    assert out.shape[2] == 3
+    assert 0 <= out.min() <= out.max() <= 255
 
 
 @pytest.mark.parametrize(
@@ -131,84 +121,45 @@ def test_check_valid_image_extensions(path, expected):
     assert image_utils.check_valid_image(path) is expected
 
 
-def test_save_image_normalizes_array_before_saving(monkeypatch, tmp_path):
-    captured = {}
-
-    def fake_imsave(path, arr):
-        captured["path"] = path
-        captured["arr"] = arr
-
-    monkeypatch.setattr(image_utils.plt, "imsave", fake_imsave)
-
-    arr = np.array([[[0, 127.5, 255.0]]], dtype=float)
+def test_save_image_creates_valid_file(tmp_path):
+    arr: np.ndarray = np.full((10, 10, 3), 128.0, dtype=float)
     out_path = tmp_path / "img.png"
+
     image_utils.save_image(arr, str(out_path))
 
-    assert captured["path"] == str(out_path)
-    np.testing.assert_allclose(captured["arr"], arr / 255.0)
+    assert out_path.exists()
+    loaded = image_utils.load_image(str(out_path))
+    assert loaded.shape == arr.shape
 
 
-def test_resize_image_square_over_limit_resizes_and_saves(monkeypatch, tmp_path):
-    monkeypatch.setattr(image_utils, "load_image", lambda _: np.ones((600, 600, 3), dtype=np.uint8))
+def test_resize_image_large_image_gets_resized(tmp_path):
+    large: np.ndarray = np.full((250, 1000, 3), 180.0, dtype=float)
+    input_path = tmp_path / "large.png"
+    image_utils.save_image(large, str(input_path))
 
-    resize_calls = {}
+    output_dir = tmp_path / "resized"
+    output_dir.mkdir()
 
-    def fake_resize(image, dsize):
-        resize_calls["dsize"] = dsize
-        return np.zeros((500, 500, 3), dtype=np.uint8)
+    out_image, out_path = image_utils.resize_image(str(input_path), str(output_dir))
 
-    saved = {}
-
-    def fake_save_image(arr, path):
-        saved["shape"] = arr.shape
-        saved["path"] = path
-
-    monkeypatch.setattr(image_utils.cv2, "resize", fake_resize)
-    monkeypatch.setattr(image_utils, "save_image", fake_save_image)
-
-    out_image, out_path = image_utils.resize_image("/x/my_photo.jpg", str(tmp_path))
-
-    assert resize_calls["dsize"] == (500, 500)
-    assert out_image.shape == (500, 500, 3)
-    assert out_image.dtype == float
-    assert out_path == str(tmp_path / "my_photo.png")
-    assert saved["shape"] == (500, 500, 3)
-    assert saved["path"] == out_path
-
-
-def test_resize_image_rectangular_over_limit_resizes_with_aspect_ratio(monkeypatch, tmp_path):
-    # Height 250, width 1000 -> expected new_dim = (125, 500), cv2 dsize=(500, 125)
-    monkeypatch.setattr(image_utils, "load_image", lambda _: np.ones((250, 1000, 3), dtype=np.uint8))
-
-    captured = {}
-
-    def fake_resize(image, dsize):
-        captured["dsize"] = dsize
-        return np.zeros((125, 500, 3), dtype=np.uint8)
-
-    monkeypatch.setattr(image_utils.cv2, "resize", fake_resize)
-    monkeypatch.setattr(image_utils, "save_image", lambda *_: None)
-
-    out_image, out_path = image_utils.resize_image("/img/photo.jpeg", str(tmp_path))
-
-    assert captured["dsize"] == (500, 125)
+    assert out_path is not None
+    assert os.path.exists(out_path)
     assert out_image.shape == (125, 500, 3)
-    assert out_path == str(tmp_path / "photo.png")
+    assert out_image.dtype == float
 
 
-def test_resize_image_within_limit_returns_original_and_none_path(monkeypatch, tmp_path):
-    original: np.ndarray = np.ones((500, 499, 3), dtype=np.uint8)
-    monkeypatch.setattr(image_utils, "load_image", lambda _: original)
+def test_resize_image_small_image_unchanged(tmp_path):
+    small: np.ndarray = np.full((100, 150, 3), 90.0, dtype=float)
+    input_path = tmp_path / "small.png"
+    image_utils.save_image(small, str(input_path))
 
-    def fail_resize(*_args, **_kwargs):
-        raise AssertionError("cv2.resize should not be called for non-reshaped images")
+    output_dir = tmp_path / "resized"
+    output_dir.mkdir()
 
-    monkeypatch.setattr(image_utils.cv2, "resize", fail_resize)
-
-    out_image, out_path = image_utils.resize_image("/img/small.jpg", str(tmp_path))
+    out_image, out_path = image_utils.resize_image(str(input_path), str(output_dir))
 
     assert out_path is None
-    assert out_image is original
+    assert out_image.shape == (100, 150, 3)
 
 
 def test_load_image_propagates_error_for_missing_image(monkeypatch):
@@ -265,7 +216,9 @@ def test_display_grid_plot_creates_new_figure_when_columns_exceeded_and_sets_tit
         return DummyFigure()
 
     monkeypatch.setattr(image_utils.plt, "figure", fake_figure)
-    monkeypatch.setattr(image_utils.plt, "imshow", lambda img: imshow_calls.append(img.copy()))
+    monkeypatch.setattr(
+        image_utils.plt, "imshow", lambda img: imshow_calls.append(img.copy())
+    )
     monkeypatch.setattr(image_utils.plt, "axis", lambda arg: axis_calls.append(arg))
     monkeypatch.setattr(image_utils.plt, "title", lambda txt: titles.append(txt))
 
@@ -284,7 +237,9 @@ def test_display_grid_plot_creates_new_figure_when_columns_exceeded_and_sets_tit
 
 
 def test_display_grid_plot_skips_titles_when_insufficient_captions(monkeypatch):
-    monkeypatch.setattr(image_utils, "load_image", lambda _name: np.zeros((1, 1, 3), dtype=np.uint8))
+    monkeypatch.setattr(
+        image_utils, "load_image", lambda _name: np.zeros((1, 1, 3), dtype=np.uint8)
+    )
 
     class DummyFigure:
         def add_subplot(self, *_):

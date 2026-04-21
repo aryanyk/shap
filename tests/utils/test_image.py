@@ -70,9 +70,7 @@ def test_make_dir_given_file_path_raises_not_a_directory_error(tmp_path):
 
 
 def test_add_sample_images_saves_expected_imagenet_indices(monkeypatch, tmp_path):
-    baseline_image = image_utils.load_image("tests/plots/baseline/test_bar.png").astype(
-        np.uint8
-    )
+    baseline_image = image_utils.load_image("tests/plots/baseline/test_bar.png").astype(np.uint8)
 
     images = np.zeros((50, *baseline_image.shape), dtype=np.uint8)
     images[25] = np.full_like(baseline_image, 10)
@@ -81,9 +79,7 @@ def test_add_sample_images_saves_expected_imagenet_indices(monkeypatch, tmp_path
     images[44] = np.full_like(baseline_image, 200)
     labels = np.arange(50)
 
-    monkeypatch.setattr(
-        image_utils.shap.datasets, "imagenet50", lambda: (images, labels)
-    )
+    monkeypatch.setattr(image_utils.shap.datasets, "imagenet50", lambda: (images, labels))
 
     image_utils.add_sample_images(str(tmp_path))
 
@@ -216,9 +212,7 @@ def test_display_grid_plot_creates_new_figure_when_columns_exceeded_and_sets_tit
         return DummyFigure()
 
     monkeypatch.setattr(image_utils.plt, "figure", fake_figure)
-    monkeypatch.setattr(
-        image_utils.plt, "imshow", lambda img: imshow_calls.append(img.copy())
-    )
+    monkeypatch.setattr(image_utils.plt, "imshow", lambda img: imshow_calls.append(img.copy()))
     monkeypatch.setattr(image_utils.plt, "axis", lambda arg: axis_calls.append(arg))
     monkeypatch.setattr(image_utils.plt, "title", lambda txt: titles.append(txt))
 
@@ -237,9 +231,7 @@ def test_display_grid_plot_creates_new_figure_when_columns_exceeded_and_sets_tit
 
 
 def test_display_grid_plot_skips_titles_when_insufficient_captions(monkeypatch):
-    monkeypatch.setattr(
-        image_utils, "load_image", lambda _name: np.zeros((1, 1, 3), dtype=np.uint8)
-    )
+    monkeypatch.setattr(image_utils, "load_image", lambda _name: np.zeros((1, 1, 3), dtype=np.uint8))
 
     class DummyFigure:
         def add_subplot(self, *_):

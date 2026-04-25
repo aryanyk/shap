@@ -36,6 +36,8 @@ def test_tree_ensemble_empty_list_raises_invalid_model_error():
 
     with pytest.raises(InvalidModelError, match="Model type not yet supported by TreeExplainer: <class 'list'>"):
         TreeEnsemble([])
+
+
 def test_large_background_dataset_warning():
     """A warning should be emitted when >1000 background samples are passed
     with feature_perturbation='interventional'. Regression test for GH#4385."""

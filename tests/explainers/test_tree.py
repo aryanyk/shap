@@ -30,6 +30,14 @@ def test_unsupported_model_raises_error():
         _ = shap.TreeExplainer(CustomEstimator())
 
 
+def test_tree_ensemble_empty_list_raises_invalid_model_error():
+    """An empty list should raise InvalidModelError instead of IndexError."""
+    from shap.explainers._tree import TreeEnsemble
+
+    with pytest.raises(InvalidModelError, match="Model type not yet supported by TreeExplainer: <class 'list'>"):
+        TreeEnsemble([])
+
+
 def test_front_page_xgboost():
     xgboost = pytest.importorskip("xgboost")
 
